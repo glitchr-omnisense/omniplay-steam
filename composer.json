@@ -1,12 +1,16 @@
 {
     "name": "omniplay/steam",
     "type": "library",
-    "description": "Omniplay's Steam player identity, under any PHP host: a player's Steam session ticket verified on the platform through the Steamworks Web API (ISteamUserAuth/AuthenticateUserTicket) with the publisher key given by reference, answering the player's SteamID or refusing with Steam's reason. Lobbies stay in the game, through the Steamworks SDK.",
+    "description": "Omniplay's Steam, under any PHP host: an app's store record and the store's search with no key (price in the country asked, texts in the language asked), a player's library and whether they own a game with a Steam Web API key, and a player's Steam session ticket verified on the platform (ISteamUserAuth/AuthenticateUserTicket) with the publisher key given by reference, answering the player's SteamID. Lobbies stay in the game, through the Steamworks SDK.",
     "keywords": [
         "steam",
+        "valve",
+        "store",
+        "game",
+        "games",
+        "library",
         "steamworks",
         "identity",
-        "authentication",
         "session-ticket",
         "multiplayer",
         "framework-agnostic",

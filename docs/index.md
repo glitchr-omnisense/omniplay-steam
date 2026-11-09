@@ -1,21 +1,179 @@
----
-title: omniplay/steam
-order: 10
----
-
 # omniplay/steam
 
-A player's Steam session ticket verified by Steam, on the platform. The provider implements
-omnisense/omniplay's `IdentityInterface`: `platform()` is `steam`, `verify($hexTicket)` answers an
-`Identity` or refuses. See omniplay's [Player identity](https://github.com/glitchr-omnisense/omniplay/blob/1.x/docs/identity.md).
+Steam for [omnisense/omniplay](https://github.com/glitchr-omnisense/omniplay): an app's store
+record and the store's search, with no key; with a Steam Web API key, a player's library and
+whether they own a game; with the game's app id and its publisher key, a player's session ticket
+verified on the platform (`IdentityInterface`), answering their SteamID. One provider, factory
+`steam`, implementing both: the catalogue's contracts and identity. The provider calls:
 
-## The call
+| Operation | Endpoint | Key |
+|---|---|---|
+| a record | `GET https://store.steampowered.com/api/appdetails?appids=...&cc=...&l=...` | none |
+| search | `GET https://store.steampowered.com/api/storesearch/?term=...&l=...&cc=...` | none |
+| library, ownership | `GET https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=...&steamid=...&include_appinfo=1&include_played_free_games=1&format=json` | Web API key |
+| a player's identity | `GET https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/?key=...&appid=...&ticket=...&identity=...` | publisher key |
+
+`appdetails` and `storesearch` are the storefront's own endpoints, not documented by Valve. A
+publisher's `ISteamUser/CheckAppOwnership` (a publisher key) is not used. Every request sends
+`Accept: application/json` and the configured User-Agent.
+
+## Installation
+
+```sh
+composer require omniplay/steam
+```
+
+Requires PHP 8.2, `omnisense/omniplay` (1.x) and `symfony/http-client` (6.4, 7 or 8).
+
+## Credentials
+
+- None for the store.
+- A **Steam Web API key** (`key`, from steamcommunity.com/dev) for players' libraries and
+  ownership. It travels in the query string, as the Web API takes it.
+- The game's **publisher Web API key** for identity, given by reference (`publisher_key`, an
+  environment variable's name by default: `STEAM_PUBLISHER_KEY`), read through the factory's
+  `SecretsInterface` (the environment, unless another is given: `new SteamFactory($http,
+  $secrets)`) at each call; in no option, no exception, nothing returned. Steam's reference says
+  `AuthenticateUserTicket` "requires a publisher API key" and "MUST be called from a secure
+  server".
+
+## Options
+
+| Option | Type | Default | Required | |
+|---|---|---|---|---|
+| `key` | string | `null` | no | the Web API key |
+| `language` | string | `english` | no | Steam's language name, or an ISO code mapped to it: `en` english, `fr` french, `de` german, `es` spanish, `it` italian, `pt` portuguese, `pt-br` brazilian, `ru` russian, `ja` japanese, `ko` koreana, `zh` schinese, `zh-tw` tchinese, `pl` polish, `nl` dutch, `sv` swedish, `tr` turkish, `uk` ukrainian; another value is sent as it is |
+| `country` | string | `US` | no | the prices' country (`cc`), upper-cased |
+| `user_agent` | string | `omniplay/1.0 (+https://github.com/glitchr-omnisense/omniplay)` | no | |
+| `store` | string | `https://store.steampowered.com` | no | |
+| `api` | string | `https://api.steampowered.com` | no | |
+| `appid` | int | `null` | for identity | the game's Steam app id, an unsigned 32-bit number; without it, no identity |
+| `publisher_key` | string | `STEAM_PUBLISHER_KEY` | for identity | the publisher key's reference |
+| `identity` | string | `null` | no | the string the game passes to `GetAuthTicketForWebApi`; Steam then authenticates only the tickets made with it |
+| `refuse_banned` | bool | `false` | no | a player banned by VAC or by the publisher is refused rather than answered with the ban in the claims |
+| `partner_api` | string | `https://partner.steam-api.com` | no | an https host; `https://api.steampowered.com` is accepted too |
+
+## Capabilities
+
+| Contract | |
+|---|---|
+| `SearchInterface` | yes |
+| `CatalogueInterface` | by Steam app number (digits only) |
+| `LibraryInterface`, `OwnershipInterface` | with `key`; a player is a 64-bit Steam ID (17 digits) |
+| `IdentityInterface` | with `appid`: `platform()` is `steam`, `verify($hexTicket)` an `Identity` (`steam:<SteamID64>`) or a refusal; `where` names the host and the app |
+| prices | yes; keyless catalogue |
+
+`attribution`: `Data from Steam; Valve, Steam and their logos are trademarks of Valve Corporation`.
+
+Without `key`, `capabilities()` says no library and no ownership, and the registry refuses them:
+`Registry::library('steam')` and `::ownership('steam')` are a `NotSupportedException` (the core's
+`Registry`); the provider's own `library()` called directly is an `InvalidConfigException`.
+
+## Behaviour
+
+**A record.** `appdetails` for one app; an answer whose `success` is not `true` is `null`.
+
+| Field | Read from |
+|---|---|
+| `title` | `name` |
+| `identifiers` | `steam_appid` (else the number asked) |
+| `url` | `https://store.steampowered.com/app/<id>/` |
+| `summary` | `short_description`, HTML stripped, entities decoded |
+| `released` | `release_date.date` read in the store's languages - `18 Apr, 2011`, `Apr 18, 2011`, `18 avr. 2011`, `18. Apr. 2011`, `18 abr. 2011` (month words of English, French, German, Spanish, Italian, Portuguese); `null` for "Coming soon", a quarter or another script |
+| `comingSoon` | `release_date.coming_soon` |
+| `developers`, `publishers` | as given |
+| `genres`, `tags` | `genres[].description`, `categories[].description` (in the language asked) |
+| `platforms` | `platforms` (`windows`, `mac`, `linux` true) |
+| `price` | `is_free`: 0 in `price_overview.currency`, else `XXX`; otherwise `price_overview` `final`, `initial` (kept when it differs), `discount_percent` |
+| `images` | `header_image` (`Header`), `background_raw` (`Background`), every `screenshots[].path_full` (`Screenshot`) |
+| `ratings` | `metacritic.score` out of 100 |
+
+**Search.** Apps only (`type: app`), cut to the limit: number, name, page, platforms, price
+(`final`, `initial`, the discount computed), `tiny_image` as a 231 x 87 `Header`, Metacritic score
+when above 0.
+
+**Library.** `response.games[]`: the app number, `name` (else the number), `playtime_forever`
+(minutes), `rtime_last_played` (a UNIX time; 0 is `null`). A private profile answers no games: `[]`.
+`owns()` reads the library and looks for the app number: one call per check.
+
+## Example
+
+```php
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Omniplay\Model\GameRef;
+use Omniplay\Model\Query;
+use Omniplay\Steam\SteamFactory;
+use Symfony\Component\HttpClient\HttpClient;
+
+$steam = (new SteamFactory(HttpClient::create()))->create(['key' => getenv('STEAM_WEB_API_KEY'), 'language' => 'fr', 'country' => 'FR']);
+
+$portal = $steam->game(GameRef::steam(620));
+printf("%s, %.2f %s\n", $portal->title, $portal->price->amount / 100, $portal->price->currency);
+foreach ($steam->search(new Query('portal', limit: 3)) as $game) {
+    echo $game->identifiers->get('steam'), ' ', $game->title, "\n";
+}
+var_dump($steam->owns('76561197960287930', GameRef::steam(620)));
+```
+
+The record read from the answer recorded on 2026-10-24 (Portal 2, French, France), in the core's
+harness on 2026-10-27 - each field of the `Game`, then the call:
+
+```
+Portal 2 | 2011-04-18 | 969 EUR initial - -0%
+  ids {"steam":"620"} platforms ["windows","linux"]
+  dev ["Valve"] pub ["Valve"] genres ["Action","Aventure"] tags ["Solo","Multijoueur","Coopération"]
+  summary L'« initiative de tests perpétuels » a été étendue pour vous permettre
+  header https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/620/faffc0f560786e2f05104a8d2fac837c6969bf13/header.jpg?t=1790187113
+  background https://store.akamai.steamstatic.com/images/storepagebackground/app/620?t=1790187113
+  screenshot https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/620/ss_f3f6787d74739d3b2ec8a484b5c994b3d31ef325.1920x1080.jpg?t=1790187113
+  rating metacritic 95/100
+  https://store.steampowered.com/app/620/
+  > GET https://store.steampowered.com/api/appdetails {"appids":"620","cc":"FR","l":"french"}
+```
+
+A live call the same morning (06:17 UTC) could not reach the store from the harness's network:
+`UnreachableException: Steam could not be reached for GET /api/appdetails: TLS connect error: ...`.
+In Symfony:
+
+```yaml
+services:
+    Omniplay\Steam\SteamFactory:
+        arguments: ['@http_client']
+    Omniplay\Registry:
+        arguments:
+            $factories: ['@Omniplay\Steam\SteamFactory']
+            $config:
+                steam: { factory: steam, options: { key: '%env(default::STEAM_WEB_API_KEY)%', language: fr, country: FR } }
+```
+
+## A player's identity
+
+See omniplay's [Player identity](https://github.com/glitchr-omnisense/omniplay/blob/1.x/docs/identity.md).
+The game client calls `ISteamUser::GetAuthTicketForWebApi("<identity>")`, waits for
+`GetTicketForWebApiResponse_t`, and sends the ticket's bytes as hex to the application with its
+request to play; the application verifies it and seats the player under `steam:<SteamID64>`, the
+omniplay ticket's `sub`:
+
+```php
+$providers = new Registry([new SteamFactory($http)], ['steam' => ['factory' => 'steam', 'options' => ['appid' => 480, 'identity' => 'omniplay']]]);
+$player = $providers->identityFor('steam')?->verify($request->get('ticket'));
+$seat = $seating->seat(new Service('game', secret: 'GAME_TICKET_SECRET'), new SeatRequest($player, 'eu'));
+```
+
+Lobbies stay in the game, through the Steamworks SDK (`ISteamMatchmaking`): the lobby host asks the
+platform for a seat (with its Steam ticket), puts the server's address and the omniplay ticket in
+the lobby's metadata (`SetLobbyData`), and the other players connect with them.
+
+### The call
 
 `GET https://partner.steam-api.com/ISteamUserAuth/AuthenticateUserTicket/v1/` with:
 
 | Parameter | |
 |---|---|
-| `key` | the publisher Web API key, read by its reference (`key` option) |
+| `key` | the publisher Web API key, read by its reference (`publisher_key` option) |
 | `appid` | the `appid` option |
 | `ticket` | the proof, as given: the hex of `GetAuthTicketForWebApi`'s bytes |
 | `identity` | the `identity` option, when set |
@@ -23,7 +181,7 @@ omnisense/omniplay's `IdentityInterface`: `platform()` is `steam`, `verify($hexT
 Reference: [ISteamUserAuth](https://partner.steamgames.com/doc/webapi/ISteamUserAuth),
 [User Authentication and Ownership](https://partner.steamgames.com/doc/features/auth).
 
-## The answer
+### The answer
 
 | Steam answers | `verify()` |
 |---|---|
@@ -38,17 +196,51 @@ Reference: [ISteamUserAuth](https://partner.steamgames.com/doc/webapi/ISteamUser
 A proof that is not hex (pairs of hex digits) is refused before any request:
 `Steam refused the ticket: it is not a session ticket written in hex (...); Steam was not asked.`
 
-## Errors of configuration
+### Errors of configuration
 
-`InvalidConfigException`: no `appid`, an `appid` that is no unsigned 32-bit number, an `api` that
+`InvalidConfigException`: `verify()` without `appid` (`Verifying a Steam player needs the "appid"
+option (the game's Steam app id) and its publisher key.`), an `appid` that is no unsigned 32-bit number, a `partner_api` that
 is not an https host, the key's secret not found (`No secret in the environment variable
-"STEAM_WEB_API_KEY".`).
+"STEAM_PUBLISHER_KEY".`).
 
-## Tests
+## Errors
 
-`Tests/SteamIdentityTest.php` on Symfony's `MockHttpClient`, every request checked:
+- unknown app: `null`; a ref that is not a Steam number, or not digits: `NotSupportedException`;
+- a status of 400 or more but 404 (a 429 when the store is asked too fast): `ProviderException`
+  (`Steam answered 429 for GET /api/appdetails. Too Many Requests`); a network error:
+  `UnreachableException`;
+- no `key` for a library, a player that is not 17 digits: `InvalidConfigException`.
 
-```sh
-cd ../core/docker   # omnisense/omniplay's harness, OMNIPLAY_PLUGINS=../.. in its .env
-docker compose run --rm omniplay test --testsuite steam
-```
+The Web API's key travels in the query string, as Steam takes it; a network error's message names
+the method and the path only, with the HTTP client's reason without the URL (`Steam could not be
+reached for GET /IPlayerService/GetOwnedGames/v1/: Could not resolve host: api.steampowered.com.`,
+the core's `JsonClient`). The exception's previous, the HTTP client's, still quotes the URL.
+
+## Verified, and not
+
+Tested offline (`Tests/SteamProviderTest.php`, in the core's harness, PHP 8.4): Portal 2's record
+in French with its French price, an unknown app, a search - answers recorded on 2026-10-24 -, the
+library and ownership on an answer shaped after the Web API's documentation, the registry refusing
+them without a key. `Tests/BareTest.php`
+loads every class with the package's requirements alone.
+
+Identity (`Tests/SteamIdentityTest.php`, on the merged provider since 2026-11-09): the request
+(method, URL, query, headers), a valid ticket's SteamID and claims, Steam's refusal quoted, a proof
+that is not hex refused without a request, the bans answered or refused, no verdict and error
+statuses as `ProviderException` with the key masked, the key read by its reference, the factory's
+refusals, `verify()` refused without `appid`, a verified player seated under their SteamID through
+the core's registry - on Symfony's `MockHttpClient`, against the Steamworks Web API reference. Not
+run live: no publisher key, no game ticket; the response's shape (`response.params`,
+`response.error`) is the one Steam's clients read, not printed in Steam's reference.
+
+Verified live (`Tests/LiveTest.php`, no key, 2026-10-24): Portal 2's record in English with its US
+price, a search. On 2026-10-27 the store could not be reached from the harness (above). Not
+verified: the library and ownership (no Web API key was used).
+
+## Responsibility
+
+An independent, unofficial client, affiliated with Valve in no way. Whoever runs it complies with
+the [Steam Web API terms](https://steamcommunity.com/dev/apiterms) (100,000 calls a day; Valve's
+name and logos only as documented, no implied endorsement, links without "nofollow"; a player's
+data only as that player asks, a privacy policy) and keeps a gentle pace on the storefront's
+endpoints: see the README.

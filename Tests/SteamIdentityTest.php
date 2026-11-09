@@ -13,7 +13,7 @@ use Omniplay\Registry;
 use Omniplay\Seating;
 use Omniplay\Secret\FixedSecrets;
 use Omniplay\Steam\SteamFactory;
-use Omniplay\Steam\SteamIdentity;
+use Omniplay\Steam\SteamProvider;
 use Omniplay\Storage\InMemoryStore;
 use Omniplay\Ticket\TicketSigner;
 use Omniplay\Tickets;
@@ -49,13 +49,15 @@ final class SteamIdentityTest extends TestCase
         self::assertSame('application/json', $recorder->requests[0]['headers']['accept'] ?? null);
         self::assertNull($recorder->requests[0]['body']);
         self::assertStringNotContainsString(self::KEY, (string) json_encode($identity->toArray()));
-        self::assertSame(['contracts' => ['identity'], 'services' => [], 'regions' => [], 'where' => 'Steam Web API at https://partner.steam-api.com, app 480'], $steam->capabilities()->toArray());
+        self::assertSame(['search', 'catalogue', 'identity'], $steam->capabilities()->contracts(), 'the store keyless, no library without a Web API key');
+        self::assertSame('Steam Web API at https://partner.steam-api.com, app 480', $steam->capabilities()->where);
+        self::assertSame('steam', $steam->platform());
     }
 
     public function testWithoutAnIdentityStringNoneIsSent(): void
     {
         $recorder = new Recorder();
-        self::steam($recorder->client([['~~', 200, self::ok()]]), ['api' => 'https://api.steampowered.com/'])->verify(self::TICKET);
+        self::steam($recorder->client([['~~', 200, self::ok()]]), ['partner_api' => 'https://api.steampowered.com/'])->verify(self::TICKET);
 
         self::assertSame(['GET https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/'], $recorder->calls());
         self::assertSame(['key' => self::KEY, 'appid' => '480', 'ticket' => self::TICKET], $recorder->requests[0]['query']);
@@ -115,10 +117,18 @@ final class SteamIdentityTest extends TestCase
 
     public function testTheKeyIsReadByItsReferenceAndTheFactoryRefusesWhatIsNoAppId(): void
     {
+        $store = (new SteamFactory((new Recorder())->client([]), self::secrets()))->create();
+        self::assertFalse($store->capabilities()->identity, 'no appid: the store only');
+        try {
+            self::assertInstanceOf(SteamProvider::class, $store);
+            $store->verify(self::TICKET);
+            self::fail('No appid.');
+        } catch (InvalidConfigException $e) {
+            self::assertSame('Verifying a Steam player needs the "appid" option (the game\'s Steam app id) and its publisher key.', $e->getMessage());
+        }
         foreach ([
-            [[], 'The "steam" provider needs: appid.'],
             [['appid' => 'spacewar'], 'The "steam" provider\'s appid is the game\'s Steam app id (an unsigned 32-bit number), not "spacewar".'],
-            [['appid' => 480, 'api' => 'http://api.steampowered.com'], 'The "steam" provider\'s api is an https host ("https://partner.steam-api.com", "https://api.steampowered.com"), not "http://api.steampowered.com".'],
+            [['appid' => 480, 'partner_api' => 'http://api.steampowered.com'], 'The "steam" provider\'s partner_api is an https host ("https://partner.steam-api.com", "https://api.steampowered.com"), not "http://api.steampowered.com".'],
         ] as [$options, $message]) {
             try {
                 (new SteamFactory((new Recorder())->client([]), self::secrets()))->create($options);
@@ -128,8 +138,8 @@ final class SteamIdentityTest extends TestCase
             }
         }
 
-        $steam = (new SteamFactory((new Recorder())->client([['~~', 200, self::ok()]]), new FixedSecrets([])))->create(['appid' => 480, 'key' => 'OTHER_KEY']);
-        self::assertInstanceOf(SteamIdentity::class, $steam);
+        $steam = (new SteamFactory((new Recorder())->client([['~~', 200, self::ok()]]), new FixedSecrets([])))->create(['appid' => 480, 'publisher_key' => 'OTHER_KEY']);
+        self::assertInstanceOf(SteamProvider::class, $steam);
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('No secret "OTHER_KEY".');
         $steam->verify(self::TICKET);
@@ -152,17 +162,17 @@ final class SteamIdentityTest extends TestCase
     }
 
     /** @param array<string, mixed> $options */
-    private static function steam(HttpClientInterface $http, array $options = []): SteamIdentity
+    private static function steam(HttpClientInterface $http, array $options = []): SteamProvider
     {
         $steam = (new SteamFactory($http, self::secrets()))->create($options + ['appid' => 480]);
-        self::assertInstanceOf(SteamIdentity::class, $steam);
+        self::assertInstanceOf(SteamProvider::class, $steam);
 
         return $steam;
     }
 
     private static function secrets(): FixedSecrets
     {
-        return new FixedSecrets(['STEAM_WEB_API_KEY' => self::KEY]);
+        return new FixedSecrets(['STEAM_PUBLISHER_KEY' => self::KEY]);
     }
 
     private static function ok(bool $banned = false): string

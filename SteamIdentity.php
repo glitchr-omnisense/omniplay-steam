@@ -2,13 +2,11 @@
 
 namespace Omniplay\Steam;
 
-use Omniplay\Capabilities;
 use Omniplay\Exception\IdentityRefusedException;
 use Omniplay\Exception\ProviderException;
 use Omniplay\Http\JsonClient;
 use Omniplay\IdentityInterface;
 use Omniplay\Model\Identity;
-use Omniplay\ProviderInterface;
 use Omniplay\Secret\SecretsInterface;
 
 /**
@@ -20,9 +18,11 @@ use Omniplay\Secret\SecretsInterface;
  * answer is the player's SteamID ("steam:<SteamID64>"), or a refusal that
  * quotes Steam.
  *
- * Lobbies are not here: they stay in the game, through the Steamworks SDK.
+ * SteamProvider answers IdentityInterface through it when the "appid"
+ * option is given. Lobbies are not here: they stay in the game, through
+ * the Steamworks SDK.
  */
-final class SteamIdentity implements ProviderInterface, IdentityInterface
+final class SteamIdentity implements IdentityInterface
 {
     public const PLATFORM = 'steam';
 
@@ -42,19 +42,10 @@ final class SteamIdentity implements ProviderInterface, IdentityInterface
     ) {
     }
 
-    public function getName(): string
+    /** Whom it asks, for a person to read: Capabilities::$where. */
+    public function where(): string
     {
-        return self::PLATFORM;
-    }
-
-    public function getTitle(): string
-    {
-        return 'Steam';
-    }
-
-    public function capabilities(): Capabilities
-    {
-        return new Capabilities(where: \sprintf('Steam Web API at %s, app %d', $this->api, $this->appid), identity: true);
+        return \sprintf('Steam Web API at %s, app %d', $this->api, $this->appid);
     }
 
     public function platform(): string
