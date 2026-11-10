@@ -3,6 +3,7 @@
 ## Unreleased (1.x)
 
 ### Changed
+- 2026-11-10: the usage policy declared as data, in `policy.json` (omnisense/contracts' schema, named in `composer.json`'s `extra.omnisense.policy`). The provider implements `DeclaresUsagePolicyInterface` and gives the policy to its Capabilities. The factory hands the provider's Backoff to its JsonClient, so that a 429 and its Retry-After hold every call. `Tests/PolicyTest.php`.
 - One package, both contracts: omnigame/steam's catalogue merged in on 2026-11-09, its history kept
   (this repository's merge of omnigame-steam at 95d62f3), when the omnigame family merged into
   omniplay. `SteamProvider` - an app's store record and the store's search with no key, a player's

@@ -244,3 +244,7 @@ the [Steam Web API terms](https://steamcommunity.com/dev/apiterms) (100,000 call
 name and logos only as documented, no implied endorsement, links without "nofollow"; a player's
 data only as that player asks, a privacy policy) and keeps a gentle pace on the storefront's
 endpoints: see the README.
+
+## Usage policy
+
+The package declares its usage policy as data, in [policy.json](../policy.json) (omnisense/contracts' schema). Steam's terms could not be read from here on 2026-11-10 (steamcommunity.com timed out), so the limits and rights are declared unknown (`verifiedAt` null). The 100,000 calls a day the Web API terms are quoted for, and the storefront's unofficial 200 requests per 5 minutes, sit in the notes, not in the limits. The credit is Valve's trademark line. One `policy.json` covers both contracts, the store and the identity check, since `SteamProvider` is both. `SteamProvider::usagePolicy()` reads it, and its Capabilities carry it (`policy()`).

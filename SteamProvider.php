@@ -25,6 +25,8 @@ use Omniplay\Model\Scheme;
 use Omniplay\OwnershipInterface;
 use Omniplay\ProviderInterface;
 use Omniplay\SearchInterface;
+use Omnisense\Contracts\Policy\DeclaresUsagePolicyInterface;
+use Omnisense\Contracts\Policy\UsagePolicy;
 
 /**
  * Steam: the store's record of an app and its search (the storefront's own
@@ -35,8 +37,13 @@ use Omniplay\SearchInterface;
  * ticket verified on the platform (ISteamUserAuth/AuthenticateUserTicket,
  * SteamIdentity), answering their SteamID.
  */
-final class SteamProvider implements ProviderInterface, SearchInterface, CatalogueInterface, LibraryInterface, OwnershipInterface, IdentityInterface
+final class SteamProvider implements ProviderInterface, SearchInterface, CatalogueInterface, LibraryInterface, OwnershipInterface, IdentityInterface, DeclaresUsagePolicyInterface
 {
+    /** Steam's usage policy, as its terms read on the day it says (provenance.verifiedAt). */
+    public const POLICY = __DIR__.'/policy.json';
+
+    private static ?UsagePolicy $policy = null;
+
     /** ISO 639-1 to the store's language names (its "l" parameter). */
     private const LANGUAGES = ['en' => 'english', 'fr' => 'french', 'de' => 'german', 'es' => 'spanish', 'it' => 'italian', 'pt' => 'portuguese', 'pt-br' => 'brazilian', 'ru' => 'russian', 'ja' => 'japanese', 'ko' => 'koreana', 'zh' => 'schinese', 'zh-tw' => 'tchinese', 'pl' => 'polish', 'nl' => 'dutch', 'sv' => 'swedish', 'tr' => 'turkish', 'uk' => 'ukrainian'];
 
@@ -61,6 +68,11 @@ final class SteamProvider implements ProviderInterface, SearchInterface, Catalog
         return 'Steam';
     }
 
+    public function usagePolicy(): UsagePolicy
+    {
+        return self::$policy ??= UsagePolicy::fromFile(self::POLICY);
+    }
+
     public function capabilities(): Capabilities
     {
         return new Capabilities(
@@ -76,6 +88,7 @@ final class SteamProvider implements ProviderInterface, SearchInterface, Catalog
             keyless: true,
             where: $this->identity?->where(),
             identity: null !== $this->identity,
+            policy: $this->usagePolicy(),
         );
     }
 

@@ -51,7 +51,7 @@ final class SteamFactory extends ProviderFactory
 
     protected function build(Config $c): ProviderInterface
     {
-        $json = new JsonClient($this->http ?? HttpClient::create(['timeout' => 20]), 'Steam', ['Accept' => 'application/json', 'User-Agent' => (string) $c->string('user_agent')]);
+        $json = new JsonClient($this->http ?? HttpClient::create(['timeout' => 20]), 'Steam', ['Accept' => 'application/json', 'User-Agent' => (string) $c->string('user_agent')], $c->backoff());
 
         return new SteamProvider(
             $json,

@@ -1,0 +1,39 @@
+{
+    "$schema": "https://github.com/glitchr-omnisense/contracts/blob/1.x/resources/usage-policy.schema.json",
+    "provider": "steam",
+    "rateLimits": null,
+    "rights": {
+        "commercial": "unknown",
+        "openSourceRequired": null,
+        "caching": {
+            "permission": "unknown",
+            "maxTtl": null
+        },
+        "storage": "unknown",
+        "redistribution": "unknown",
+        "attribution": {
+            "required": true,
+            "text": "Data from Steam; Valve, Steam and their logos are trademarks of Valve Corporation",
+            "url": "https://store.steampowered.com",
+            "where": [
+                "display"
+            ]
+        },
+        "licence": null
+    },
+    "requirements": {
+        "key": false,
+        "userAgent": {
+            "required": false,
+            "pattern": null
+        }
+    },
+    "provenance": {
+        "terms": "https://steamcommunity.com/dev/apiterms",
+        "policy": "https://partner.steamgames.com/doc/webapi_overview",
+        "verifiedAt": null,
+        "declaredBy": "maintainer",
+        "contact": "https://partner.steamgames.com",
+        "notes": "Limits and rights unknown: the Steam Web API Terms of Use (steamcommunity.com/dev/apiterms) and the Steam Subscriber Agreement could not be read on 2026-11-10 (the TLS handshake timed out from every client tried). Copies of the Web API terms indexed elsewhere limit a key to 100,000 calls a day; it is not declared until read at its source. The store's endpoints (appdetails, storesearch) are undocumented and publish no limit: about 200 requests per 5 minutes per IP is an unofficial figure (SteamDB, 2015), answered by 429 or 403 beyond it. The partner host (partner.steam-api.com, AuthenticateUserTicket with a publisher key) rate-limits the connecting IP after 403s, no figure given; publisher keys are never shipped in a game client. The store needs no key; a player's library and ownership need a Web API key (the key option), the identity check a publisher key. The attribution is the trademark line of Steamworks' branding guidelines (partner.steamgames.com/doc/marketing/branding, read on 2026-11-10)."
+    }
+}
