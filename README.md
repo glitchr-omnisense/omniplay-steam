@@ -34,6 +34,19 @@ Options: `key`, `language` ("english", or an ISO code: "fr" asks "french"), `cou
 `user_agent`, `store`, `api`; for identity `appid`, `publisher_key`, `identity`, `refuse_banned`,
 `partner_api` ("https://partner.steam-api.com"). See [docs/index.md](docs/index.md).
 
+## Install
+
+```sh
+composer require omniplay/steam
+```
+
+It requires `omnisense/omniplay` `^1.0`, installed with it. A real call needs: no key for the store;
+**a Steam Web API key** for a player's library and ownership, **a publisher key** for the identity
+check (never shipped in a game client). With no account, its tests run on recorded answers (a
+`MockHttpClient`), and
+[omnisense/omniplay](https://github.com/glitchr-omnisense/omniplay#install-and-a-first-call)'s
+README has a first call that runs without one.
+
 ## Lobbies stay in the game
 
 omniplay/steam does not make, list or join lobbies: they stay in the game, through the Steamworks
